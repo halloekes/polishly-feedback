@@ -1,0 +1,46 @@
+name: Notify on New Issue
+
+on:
+  issues:
+    types: [opened]
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Determine issue type emoji
+        id: label
+        run: |
+          LABELS='${{ toJson(github.event.issue.labels) }}'
+          if echo "$LABELS" | grep -q '"bug"'; then
+            echo "prefix=🐛 Bug" >> $GITHUB_OUTPUT
+          elif echo "$LABELS" | grep -q '"feature-request"'; then
+            echo "prefix=💡 Feature-Wunsch" >> $GITHUB_OUTPUT
+          else
+            echo "prefix=📋 Issue" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Send Slack notification
+        run: |
+          curl -s -X POST https://slack.com/api/chat.postMessage \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer ${{ secrets.SLACK_BOT_TOKEN }}" \
+            -d '{"channel": "USVFQPW1H", "text": "🔔 Neues Polishly-Feedback!\n\n${{ steps.label.outputs.prefix }}: ${{ github.event.issue.title }} → ${{ github.event.issue.html_url }}"}'
+
+      - name: Send email notification
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 465
+          secure: true
+          username: ${{ secrets.GMAIL_USERNAME }}
+          password: ${{ secrets.GMAIL_APP_PASSWORD }}
+          to: ${{ secrets.NOTIFY_EMAIL }}
+          from: "Polishly Feedback <${{ secrets.GMAIL_USERNAME }}>"
+          subject: "Neues Feedback zu Polishly in GitHub"
+          body: |
+            ${{ steps.label.outputs.prefix }}: ${{ github.event.issue.title }}
+
+            ${{ github.event.issue.body }}
+
+            → ${{ github.event.issue.html_url }}
